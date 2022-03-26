@@ -40,8 +40,8 @@ public class WebSecurityConfigurerImpl extends WebSecurityConfigurerAdapter {
                 .and().csrf().disable().headers().frameOptions().disable()
                 .and()
                 .authorizeRequests()
-                .mvcMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
-                .mvcMatchers("/api/empl/payment").authenticated()
+                .mvcMatchers(HttpMethod.POST, "/api/auth/signup", "/actuator/shutdown").permitAll()
+                .anyRequest().authenticated()
                 .and()
                 .sessionManagement()
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS);
@@ -49,6 +49,6 @@ public class WebSecurityConfigurerImpl extends WebSecurityConfigurerAdapter {
 
     @Bean
     public PasswordEncoder getEncoder() {
-        return new BCryptPasswordEncoder();
+        return new BCryptPasswordEncoder(13);
     }
 }
