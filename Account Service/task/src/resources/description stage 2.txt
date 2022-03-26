@@ -1,0 +1,182 @@
+Описание
+Давайте настроим аутентификацию для нашего сервиса. Конечно, вы можете реализовать его самостоятельно, но хорошей практикой считается использование уже проверенной и надежной реализации. К счастью, Spring включает модуль Spring Security, содержащий нужные методы.
+
+На этом этапе вам необходимо обеспечить базовую аутентификацию HTTP для нашего RESTсервиса с JDBCреализациями UserDetailServiceдля управления пользователями. Вам понадобится конечная точка для регистрации пользователей на POST api/auth/signup.
+
+Чтобы проверить аутентификацию, вам нужно добавить еще одну конечную точку GET api/empl/payment/, которая будет доступна только для аутентифицированных пользователей. Для сохранения поместите пользователей в базу данных. Наш сервис будет включать базу данных H2.
+
+Для запуска тестов application.properties файл должен содержать следующую строку: spring.datasource.url=jdbc:h2:file:../service_db.
+Начиная с версии 2.3.0, Spring Boot по умолчанию скрывает сообщения об ошибках, для прохождения тестов необходимо добавить server.error.include-message=alwaysв application.propertiesфайл следующую строку: Дополнительные сведения см . в примечаниях к выпуску Spring Boot .
+
+Вы можете использовать статью « Реализация безопасности Spring Boot с использованием UserDetailsService » от Progressive Coder, чтобы настроить аутентификацию в Spring Boot с использованием UserDetailsServices.
+
+Предлагаем настроить решение под задачи нашего сервиса. Во-первых, не забывайте, что мы реализуем RESTархитектуру. Это означает, что у нас нет сессий. Для аутентификации выбран базовый механизм HTTP, и в случае попытки несанкционированного доступа сервис должен ответить соответствующим статусом. Также настройте доступ для API. Для этого вам нужно настроить HttpSecurityобъект с цепочкой методов следующим образом:
+
+    public void configure(HttpSecurity http) throws Exception {
+        http.httpBasic()
+                .authenticationEntryPoint(restAuthenticationEntryPoint) // Handle auth error
+                .and()
+                .csrf().disable().headers().frameOptions().disable() // for Postman, the H2 console
+                .and()
+                .authorizeRequests() // manage access
+                .antMatchers(HttpMethod.POST, "/api/signup").permitAll()
+                // other matchers
+                .and()
+                .sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS); // no session
+    }
+RestAuthenticationEntryPointявляется экземпляром класса, реализующего AuthenticationEntryPointинтерфейс. Эта конечная точка обрабатывает ошибки аутентификации. Например:
+
+    public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
+
+        @Override
+        public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, authException.getMessage());
+        }
+    }
+Если вы не знаете, как использовать исключения в Spring Boot, посмотрите:
+
+@ResponseStatus(code = HttpStatus.BAD_REQUEST, reason = "Some error meassage")
+public class UserExistException extends RuntimeException { }
+Вам также понадобятся некоторые зависимости безопасности в Gradle:
+
+dependencies {
+   ... other dependencies ...
+   implementation 'org.springframework.boot:spring-boot-starter-security'
+}
+Цели
+Добавьте защиту Spring в свой проект и настройте базовую аутентификацию HTTP;
+
+Для хранения пользователей и паролей добавьте реализацию JDBC UserDetailsServiceс базой данных H2;
+
+Измените POST api/auth/signupконечную точку. Он должен быть доступен для регистрации неавторизованным пользователям и принимает данные в формате JSON:
+
+{
+   "name": "<String value, not empty>",
+   "lastname": "<String value, not empty>",
+   "email": "<String value, not empty>",
+   "password": "<String value, not empty>"
+}
+Если все в порядке, укажите HTTP OKстатус ( 200) и следующее тело:
+
+{
+   "id": "<Long value, not empty>",
+   "name": "<String value, not empty>",
+   "lastname": "<String value, not empty>",
+   "email": "<String value, not empty>"
+}
+В качестве уникального логина для аутентификации возьмите значение из emailполя. Значение emailполя должно быть нечувствительным к регистру . Id— уникальный идентификатор, который сервис присваивает пользователю. Если электронная почта занята, служба должна ответить, как показано ниже. Остальные сообщения об ошибках такие же, как и на предыдущем этапе:
+
+{
+    "timestamp": "data",
+    "status": 400,
+    "error": "Bad Request",
+    "message": "User exist!",
+    "path": "/api/auth/signup"
+}
+Добавьте GET api/empl/payment/конечную точку, которая позволяет тестировать аутентификацию. Он должен быть доступен только аутентифицированным пользователям и возвращать ответ в формате JSON, представляющий пользователя, отправившего запрос:
+
+{
+   "id": "<Long value, not empty>",
+   "name": "<String value, not empty>",
+   "lastname": "<String value, not empty>",
+   "email": "<String value, not empty>"
+}
+Поле emailдолжно содержать логин пользователя, отправившего запрос. Сообщение об ошибке для неаутентифицированного или неправильного пользователя должно иметь 401 (Unauthorized)статус.
+
+Примеры
+Пример 1: запрос POST для API/auth/signup с правильным пользователем
+
+Тело запроса:
+
+{
+   "name": "John",
+   "lastname": "Doe",
+   "email": "JohnDoe@acme.com",
+   "password": "secret"
+}
+Ответ:200 OK
+
+Текст ответа:
+
+{
+   "id": 1,
+   "name": "John",
+   "lastname": "Doe",
+   "email": "JohnDoe@acme.com"
+}
+Пример 2: POST- запрос на api/auth/signup с занятой электронной почтой
+
+Тело запроса:
+
+{
+   "name": "John",
+   "lastname": "Doe",
+   "email": "johndoe@acme.com",
+   "password": "secret"
+}
+Ответ: 400 Bad Request
+
+Текст ответа:
+
+{
+    "timestamp": "<data>",
+    "status": 400,
+    "error": "Bad Request",
+    "message": "User exist!",
+    "path": "/api/auth/signup"
+}
+Пример 3: POST-запрос для api/auth/signup с неверным форматом JSON пользователя
+
+Тело запроса:
+
+{
+   "lastname": "Doe",
+   "email": "johndoe@acme.com",
+   "password": "secret"
+}
+Ответ: 400 Bad Request
+
+Текст ответа:
+
+{
+   "timestamp": "<date>",
+   "status": 400,
+   "error": "Bad Request",
+   "path": "/api/auth/signup"
+}
+Пример 4: GET- запрос для /api/empl/payment с правильной аутентификацией, имя пользователя = johndoe@acme.com, пароль = secret
+
+Ответ:200 OK
+
+Текст ответа:
+
+{
+    "id": 1,
+    "name": "John",
+    "lastname": "Doe",
+    "email": "johndoe@acme.com"
+}
+Пример 5: GET- запрос для /api/empl/payment с правильной аутентификацией; имя пользователя = JohnDoe@acme.com, пароль = секрет
+
+Ответ:200 OK
+
+Текст ответа:
+
+{
+    "id": 1,
+    "name": "John",
+    "lastname": "Doe",
+    "email": "johndoe@acme.com"
+}
+Пример 6: GET- запрос для /api/empl/payment с неправильной аутентификацией; имя пользователя = johndoe@acme.com, пароль = no_secret
+
+Текст ответа:
+
+{
+    "timestamp": "<data>",
+    "status": 401,
+    "error": "Unauthorized",
+    "message": "",
+    "path": "/api/empl/payment"
+}
