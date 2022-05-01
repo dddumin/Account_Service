@@ -1,6 +1,5 @@
 package account;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -12,7 +11,7 @@ import java.util.List;
 
 @SpringBootApplication
 public class AccountServiceApplication {
-    public static List<String> breachedPasswords = new ArrayList<>();
+    private static List<String> breachedPasswords = new ArrayList<>();
 
     public static void main(String[] args) {
         SpringApplication.run(AccountServiceApplication.class, args);
@@ -21,5 +20,9 @@ public class AccountServiceApplication {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public static List<String> getBranchedPasswords() {
+        return breachedPasswords;
     }
 }
